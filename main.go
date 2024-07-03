@@ -242,7 +242,12 @@ func getLong(code string) (*URL, error) {
 }
 
 func createLink(c *gin.Context) { //HTTP/1.1 404 Not Found
-	code := c.Param("long_url")
+	var code string
+	if err := c.BindJSON(&code); err != nil {
+		// Handle error (e.g., log the error, return an error response)
+		c.IndentedJSON(http.StatusPreconditionFailed, gin.H{"message": "Could not read input."})
+		return
+	}
 	for i, l := range links {
 		if l.LongURL == code {
 			c.IndentedJSON(http.StatusFound, links[i])
@@ -270,6 +275,6 @@ func main() {
 	router.GET("/links", getLinks)                // curl localhost:8080/links
 	router.GET("/links/:short_code", requestLong) // curl localhost:8080/links/000002
 	router.POST("/links", addLink)                // curl localhost:8080/links --include --header "Content-Type: application/json" -d @body.json --request "POST"
-	router.POST("/links/:long_url", createLink)
+	router.POST("/links/", createLink)
 	router.Run("localhost:8080")
 }
