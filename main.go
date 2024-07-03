@@ -6,13 +6,12 @@ import (
 	"errors"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	/*"database/sql"
 	"encoding/json"
 	"fmt"
 	"io"
 
-
-	"github.com/google/uuid"
 	"github.com/gorilla/mux"
 
 	"go.mongodb.org/mongo-driver/mongo"
@@ -28,11 +27,7 @@ var links = []URL{
 	{LongURL: "https://www.youtube.com/", ShortCode: "000002"},
 }
 
-/*func generateShortCode() (string, error) {
-	// uuid (fixed length - can be modified)
-	shortCode := uuid.New().String()[:6] // Get first 6 characters from UUID
-	return shortCode, nil
-}
+/*
 
 func shortenURLHandler(w http.ResponseWriter, r *http.Request) {
 	var urlData URL
@@ -207,20 +202,27 @@ func getLinks(c *gin.Context) {
 	c.IndentedJSON(http.StatusOK, links)
 }
 
-func createLink(c *gin.Context) {
+func addLink(c *gin.Context) {
 	var newLink URL
 
 	if err := c.BindJSON(&newLink); err != nil {
 		return
 	}
 
+	for _, link := range links {
+		if link == newLink {
+			c.IndentedJSON(http.StatusFound, gin.H{"message": "Link already in memory."})
+			return
+		}
+	}
+
 	links = append(links, newLink)
 	c.IndentedJSON(http.StatusCreated, newLink)
 }
 
-func requestLink(c *gin.Context) {
+func requestLong(c *gin.Context) {
 	code := c.Param("short_code")
-	URL, err := getLink(code)
+	URL, err := getLong(code)
 
 	if err != nil {
 		c.IndentedJSON(http.StatusNotFound, gin.H{"message": "Link not found."})
@@ -230,13 +232,29 @@ func requestLink(c *gin.Context) {
 	c.IndentedJSON(http.StatusOK, URL)
 }
 
-func getLink(code string) (*URL, error) {
+func getLong(code string) (*URL, error) {
 	for i, l := range links {
 		if l.ShortCode == code {
 			return &links[i], nil
 		}
 	}
 	return nil, errors.New("code not found")
+}
+
+func createLink(c *gin.Context) { //HTTP/1.1 404 Not Found
+	code := c.Param("long_url")
+	for i, l := range links {
+		if l.LongURL == code {
+			c.IndentedJSON(http.StatusFound, links[i])
+			return
+		}
+	}
+	var newLink URL
+	newLink.LongURL = code
+	newLink.ShortCode = uuid.New().String()[:6] // Get first 6 characters from UUID
+
+	links = append(links, newLink)
+	c.IndentedJSON(http.StatusCreated, newLink)
 }
 
 /*func main() {
@@ -249,8 +267,9 @@ func getLink(code string) (*URL, error) {
 
 func main() {
 	router := gin.Default()
-	router.GET("/links", getLinks)
-	router.GET("/links/:short_code", requestLink)
-	router.POST("/links", createLink)
+	router.GET("/links", getLinks)                // curl localhost:8080/links
+	router.GET("/links/:short_code", requestLong) // curl localhost:8080/links/000002
+	router.POST("/links", addLink)                // curl localhost:8080/links --include --header "Content-Type: application/json" -d @body.json --request "POST"
+	router.POST("/links/:long_url", createLink)
 	router.Run("localhost:8080")
 }
