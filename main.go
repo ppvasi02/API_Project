@@ -18,10 +18,7 @@ type code struct {
 	LongURL string `json:"long_url"`
 }
 
-var links = []URL{
-	{LongURL: "https://www.google.com/", ShortCode: "000001"},
-	{LongURL: "https://www.youtube.com/", ShortCode: "000002"},
-}
+var links = []URL{}
 
 func getLinks(c *gin.Context) {
 	c.IndentedJSON(http.StatusOK, links)
@@ -49,25 +46,28 @@ func getLink(code string) (*URL, error) {
 }
 
 func createLink(c *gin.Context) {
-	var url code
+	var codeList []code
+	// var url code
+	var newLink URL
 
-	if err := c.BindJSON(&url); err != nil {
+	if err := c.BindJSON(&codeList); err != nil {
 		return
 	}
-	for i, l := range links {
-		if l.LongURL == url.LongURL {
-			c.IndentedJSON(http.StatusFound, gin.H{"message": "Link already in memory."})
-			c.IndentedJSON(http.StatusFound, links[i])
-			return
+outerLoop:
+	for i := range codeList {
+		for j := range links {
+			if links[j].LongURL == codeList[i].LongURL {
+				c.IndentedJSON(http.StatusFound, gin.H{"message": "Link already in memory."})
+				c.IndentedJSON(http.StatusFound, links[j])
+				continue outerLoop // move to next iteration of outerloop
+			}
 		}
+		newLink.LongURL = codeList[i].LongURL
+		newLink.ShortCode = uuid.New().String()[:6] // Get first 6 characters from UUID
+
+		links = append(links, newLink)
+		c.IndentedJSON(http.StatusCreated, newLink)
 	}
-
-	var newLink URL
-	newLink.LongURL = url.LongURL
-	newLink.ShortCode = uuid.New().String()[:6] // Get first 6 characters from UUID
-
-	links = append(links, newLink)
-	c.IndentedJSON(http.StatusCreated, newLink)
 }
 
 func main() {
