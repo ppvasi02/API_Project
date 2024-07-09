@@ -1,3 +1,11 @@
-{
+[
+    {
     "long_url": "https://gmail.com/"
-}
+    },
+    {
+    "long_url": "https://www.google.com/"
+    },
+    {
+    "long_url": "https://www.youtube.com/"
+    }
+]
