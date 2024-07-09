@@ -27,24 +27,6 @@ func getLinks(c *gin.Context) {
 	c.IndentedJSON(http.StatusOK, links)
 }
 
-func importLink(c *gin.Context) {
-	var newLink URL
-
-	if err := c.BindJSON(&newLink); err != nil {
-		return
-	}
-
-	for _, link := range links {
-		if link == newLink {
-			c.IndentedJSON(http.StatusFound, gin.H{"message": "Link already in memory."})
-			return
-		}
-	}
-
-	links = append(links, newLink)
-	c.IndentedJSON(http.StatusCreated, newLink)
-}
-
 func requestLink(c *gin.Context) {
 	code := c.Param("short_code")
 	URL, err := getLink(code)
@@ -74,6 +56,7 @@ func createLink(c *gin.Context) {
 	}
 	for i, l := range links {
 		if l.LongURL == url.LongURL {
+			c.IndentedJSON(http.StatusFound, gin.H{"message": "Link already in memory."})
 			c.IndentedJSON(http.StatusFound, links[i])
 			return
 		}
@@ -91,7 +74,6 @@ func main() {
 	router := gin.Default()
 	router.GET("/links", getLinks)                // curl localhost:8080/links
 	router.GET("/links/:short_code", requestLink) // curl localhost:8080/links/000002
-	// router.POST("/links", importLink)             // curl localhost:8080/links --include --header "Content-Type: application/json" -d @body.json --request "POST"
-	router.POST("/links", createLink)
+	router.POST("/links", createLink)             // curl localhost:8080/links --include --header "Content-Type: application/json" -d '{"long_url": "https://gmail.com/"}' --request "POST"
 	router.Run("localhost:8080")
 }
