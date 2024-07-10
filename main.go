@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"log"
 	"net/http"
 
 	"errors"
@@ -79,6 +80,8 @@ func main() {
 	serverAPI := options.ServerAPI(options.ServerAPIVersion1)
 	opts := options.Client().ApplyURI("mongodb+srv://pvasilyev:ccCTkS1UnwiAuxr4@apiproject0.uugqh4j.mongodb.net/?retryWrites=true&w=majority&appName=APIProject0").SetServerAPIOptions(serverAPI)
 
+	ctx := context.Background()
+
 	// Create a new client and connect to the server
 	client, err := mongo.Connect(context.TODO(), opts)
 	if err != nil {
@@ -95,6 +98,26 @@ func main() {
 		panic(err)
 	}
 	fmt.Println("Pinged your deployment. You successfully connected to MongoDB!")
+
+	// Get the database object
+	db := client.Database("URL_Shortener_Database")
+
+	// Get the collection object (or create it if it doesn't exist)
+	col := db.Collection("URLs")
+
+	// Example document to insert (replace with actual long URL and generated short code)
+	newURL := URL{
+		LongURL:   "https://www.example.com/long-article",
+		ShortCode: "abc123", // Replace with your generated short code
+	}
+
+	// Insert the document into the collection
+	_, err = col.InsertOne(ctx, newURL)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	fmt.Println("URL mapping saved!")
 
 	router := gin.Default()
 	router.GET("/links", getLinks)                // curl localhost:8080/links
