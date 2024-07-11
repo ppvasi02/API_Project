@@ -27,6 +27,62 @@ type code struct {
 var links = []URL{}
 
 func getLinks(c *gin.Context) {
+	serverAPI := options.ServerAPI(options.ServerAPIVersion1)
+	URI := "mongodb+srv://pvasilyev:ccCTkS1UnwiAuxr4@apiproject0.uugqh4j.mongodb.net/?retryWrites=true&w=majority&appName=APIProject0"
+	opts := options.Client().ApplyURI(URI).SetServerAPIOptions(serverAPI)
+
+	// Create a new client and connect to the server
+	client, err := mongo.Connect(context.TODO(), opts)
+	if err != nil {
+		panic(err)
+	}
+
+	defer func() {
+		if err = client.Disconnect(context.TODO()); err != nil {
+			panic(err)
+		}
+	}()
+	// Send a ping to confirm a successful connection
+	if err := client.Database("admin").RunCommand(context.TODO(), bson.D{{"ping", 1}}).Err(); err != nil {
+		panic(err)
+	}
+	fmt.Println("Pinged your deployment. You successfully connected to MongoDB!")
+
+	ctx := context.Background()
+
+	db := client.Database("URL_Shortener_Database")
+
+	// Get the collection object (or create it if it doesn't exist)
+	col := db.Collection("URLs")
+
+	cursor, err := col.Find(ctx, bson.M{}) // Find all documents with an empty filter
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	defer cursor.Close(context.Background())
+
+	// Declare a slice to store the retrieved documents
+	var links []URL // Replace with your actual Link struct
+
+	// Iterate through the cursor and decode each document
+	for cursor.Next(context.Background()) {
+		var link URL // Define a Link object for each document
+		err := cursor.Decode(&link)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		links = append(links, link) // Add the decoded document to the slice
+	}
+
+	// Check for any errors during iteration
+	if err := cursor.Err(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Respond with the retrieved links
 	c.IndentedJSON(http.StatusOK, links)
 }
 
@@ -81,8 +137,6 @@ func connectAndCreate(newLink URL) {
 	URI := "mongodb+srv://pvasilyev:ccCTkS1UnwiAuxr4@apiproject0.uugqh4j.mongodb.net/?retryWrites=true&w=majority&appName=APIProject0"
 	opts := options.Client().ApplyURI(URI).SetServerAPIOptions(serverAPI)
 
-	ctx := context.Background()
-
 	// Create a new client and connect to the server
 	client, err := mongo.Connect(context.TODO(), opts)
 	if err != nil {
@@ -99,6 +153,8 @@ func connectAndCreate(newLink URL) {
 		panic(err)
 	}
 	fmt.Println("Pinged your deployment. You successfully connected to MongoDB!")
+
+	ctx := context.Background()
 
 	// Get the database object
 	db := client.Database("URL_Shortener_Database")
