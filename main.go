@@ -6,7 +6,7 @@ import (
 	"log"
 	"net/http"
 
-	"errors"
+	//"errors"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -14,6 +14,8 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
+
+var URI string = "mongodb+srv://pvasilyev:ccCTkS1UnwiAuxr4@apiproject0.uugqh4j.mongodb.net/?retryWrites=true&w=majority&appName=APIProject0"
 
 type URL struct {
 	LongURL   string `json:"long_url"`
@@ -24,11 +26,8 @@ type code struct {
 	LongURL string `json:"long_url"`
 }
 
-var links = []URL{}
-
 func getLinks(c *gin.Context) {
 	serverAPI := options.ServerAPI(options.ServerAPIVersion1)
-	URI := "mongodb+srv://pvasilyev:ccCTkS1UnwiAuxr4@apiproject0.uugqh4j.mongodb.net/?retryWrites=true&w=majority&appName=APIProject0"
 	opts := options.Client().ApplyURI(URI).SetServerAPIOptions(serverAPI)
 
 	// Create a new client and connect to the server
@@ -52,7 +51,6 @@ func getLinks(c *gin.Context) {
 
 	db := client.Database("URL_Shortener_Database")
 
-	// Get the collection object (or create it if it doesn't exist)
 	col := db.Collection("URLs")
 
 	cursor, err := col.Find(ctx, bson.M{}) // Find all documents with an empty filter
@@ -62,10 +60,8 @@ func getLinks(c *gin.Context) {
 	}
 	defer cursor.Close(context.Background())
 
-	// Declare a slice to store the retrieved documents
-	var links []URL // Replace with your actual Link struct
+	var links []URL
 
-	// Iterate through the cursor and decode each document
 	for cursor.Next(context.Background()) {
 		var link URL // Define a Link object for each document
 		err := cursor.Decode(&link)
@@ -73,20 +69,18 @@ func getLinks(c *gin.Context) {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
-		links = append(links, link) // Add the decoded document to the slice
+		links = append(links, link)
 	}
 
-	// Check for any errors during iteration
 	if err := cursor.Err(); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	// Respond with the retrieved links
 	c.IndentedJSON(http.StatusOK, links)
 }
 
-func requestLink(c *gin.Context) {
+/*func requestLink(c *gin.Context) {
 	code := c.Param("short_code")
 	URL, err := getLink(code)
 
@@ -96,22 +90,71 @@ func requestLink(c *gin.Context) {
 	}
 
 	c.IndentedJSON(http.StatusOK, URL)
-}
+}*/
 
-func getLink(code string) (*URL, error) {
+/*func getLink(code string) (*URL, error) {
 	for i, l := range links {
 		if l.ShortCode == code {
 			return &links[i], nil
 		}
 	}
 	return nil, errors.New("code not found")
-}
+}*/
 
 func createLink(c *gin.Context) {
 	var codeList []code
 	var newLink URL
 
 	if err := c.BindJSON(&codeList); err != nil {
+		return
+	}
+	serverAPI := options.ServerAPI(options.ServerAPIVersion1)
+	opts := options.Client().ApplyURI(URI).SetServerAPIOptions(serverAPI)
+
+	// Create a new client and connect to the server
+	client, err := mongo.Connect(context.TODO(), opts)
+	if err != nil {
+		panic(err)
+	}
+
+	defer func() {
+		if err = client.Disconnect(context.TODO()); err != nil {
+			panic(err)
+		}
+	}()
+	// Send a ping to confirm a successful connection
+	if err := client.Database("admin").RunCommand(context.TODO(), bson.D{{"ping", 1}}).Err(); err != nil {
+		panic(err)
+	}
+	fmt.Println("Pinged your deployment. You successfully connected to MongoDB!")
+
+	ctx := context.Background()
+
+	db := client.Database("URL_Shortener_Database")
+
+	col := db.Collection("URLs")
+
+	cursor, err := col.Find(ctx, bson.M{}) // Find all documents with an empty filter
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	defer cursor.Close(context.Background())
+
+	var links []URL
+
+	for cursor.Next(context.Background()) {
+		var link URL // Define a Link object for each document
+		err := cursor.Decode(&link)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		links = append(links, link)
+	}
+
+	if err := cursor.Err(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 outerLoop:
@@ -128,13 +171,12 @@ outerLoop:
 
 		links = append(links, newLink)
 		c.IndentedJSON(http.StatusCreated, newLink)
-		connectAndCreate(newLink)
 	}
+	connectAndCreate(links)
 }
 
-func connectAndCreate(newLink URL) {
+func connectAndCreate(newLinks []URL) {
 	serverAPI := options.ServerAPI(options.ServerAPIVersion1)
-	URI := "mongodb+srv://pvasilyev:ccCTkS1UnwiAuxr4@apiproject0.uugqh4j.mongodb.net/?retryWrites=true&w=majority&appName=APIProject0"
 	opts := options.Client().ApplyURI(URI).SetServerAPIOptions(serverAPI)
 
 	// Create a new client and connect to the server
@@ -162,9 +204,11 @@ func connectAndCreate(newLink URL) {
 	// Get the collection object (or create it if it doesn't exist)
 	col := db.Collection("URLs")
 
-	_, err = col.InsertOne(ctx, newLink)
-	if err != nil {
-		log.Fatal(err)
+	for link := range newLinks {
+		_, err = col.InsertOne(ctx, link)
+		if err != nil {
+			log.Fatal(err)
+		}
 	}
 
 	fmt.Println("URL mapping saved!")
@@ -172,8 +216,8 @@ func connectAndCreate(newLink URL) {
 
 func main() {
 	router := gin.Default()
-	router.GET("/links", getLinks)                // curl localhost:8080/links
-	router.GET("/links/:short_code", requestLink) // curl localhost:8080/links/000002
-	router.POST("/links", createLink)             // curl localhost:8080/links --include --header "Content-Type: application/json" -d '{"long_url": "https://gmail.com/"}' --request "POST"
+	router.GET("/links", getLinks) // curl localhost:8080/links
+	//router.GET("/links/:short_code", requestLink) // curl localhost:8080/links/000002
+	router.POST("/links", createLink) // curl localhost:8080/links --include --header "Content-Type: application/json" -d '{"long_url": "https://gmail.com/"}' --request "POST"
 	router.Run("localhost:8080")
 }
