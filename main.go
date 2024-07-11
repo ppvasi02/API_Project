@@ -52,7 +52,6 @@ func getLink(code string) (*URL, error) {
 }
 
 func createLink(c *gin.Context) {
-	ctx, col := connectToDB()
 	var codeList []code
 	var newLink URL
 
@@ -73,22 +72,16 @@ outerLoop:
 
 		links = append(links, newLink)
 		c.IndentedJSON(http.StatusCreated, newLink)
-
-		_, err := col.InsertOne(ctx, newLink)
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		fmt.Println("URL mapping saved!")
+		connectAndCreate(newLink)
 	}
 }
 
-func connectToDB() (ctx context.Context, col *mongo.Collection) {
+func connectAndCreate(newLink URL) {
 	serverAPI := options.ServerAPI(options.ServerAPIVersion1)
 	URI := "mongodb+srv://pvasilyev:ccCTkS1UnwiAuxr4@apiproject0.uugqh4j.mongodb.net/?retryWrites=true&w=majority&appName=APIProject0"
 	opts := options.Client().ApplyURI(URI).SetServerAPIOptions(serverAPI)
 
-	ctx = context.Background()
+	ctx := context.Background()
 
 	// Create a new client and connect to the server
 	client, err := mongo.Connect(context.TODO(), opts)
@@ -111,14 +104,17 @@ func connectToDB() (ctx context.Context, col *mongo.Collection) {
 	db := client.Database("URL_Shortener_Database")
 
 	// Get the collection object (or create it if it doesn't exist)
-	col = db.Collection("URLs")
+	col := db.Collection("URLs")
 
-	return ctx, col
+	_, err = col.InsertOne(ctx, newLink)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	fmt.Println("URL mapping saved!")
 }
 
 func main() {
-	connectToDB()
-
 	router := gin.Default()
 	router.GET("/links", getLinks)                // curl localhost:8080/links
 	router.GET("/links/:short_code", requestLink) // curl localhost:8080/links/000002
