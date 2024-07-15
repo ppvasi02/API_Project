@@ -16,17 +16,11 @@ import (
 )
 
 var URI string = "mongodb+srv://pvasilyev:ccCTkS1UnwiAuxr4@apiproject0.uugqh4j.mongodb.net/?retryWrites=true&w=majority&appName=APIProject0"
+var ctx context.Context
+var col *mongo.Collection
+var client *mongo.Client
 
-type URL struct {
-	LongURL   string `json:"long_url"`
-	ShortCode string `json:"short_code"`
-}
-
-type code struct {
-	LongURL string `json:"long_url"`
-}
-
-func getLinks(c *gin.Context) {
+func connectToDB() {
 	serverAPI := options.ServerAPI(options.ServerAPIVersion1)
 	opts := options.Client().ApplyURI(URI).SetServerAPIOptions(serverAPI)
 
@@ -47,12 +41,23 @@ func getLinks(c *gin.Context) {
 	}
 	fmt.Println("Pinged your deployment. You successfully connected to MongoDB!")
 
-	ctx := context.Background()
+	ctx = context.Background()
 
 	db := client.Database("URL_Shortener_Database")
 
-	col := db.Collection("URLs")
+	col = db.Collection("URLs")
+}
 
+type URL struct {
+	LongURL   string `json:"long_url"`
+	ShortCode string `json:"short_code"`
+}
+
+type code struct {
+	LongURL string `json:"long_url"`
+}
+
+func getLinks(c *gin.Context) {
 	cursor, err := col.Find(ctx, bson.M{}) // Find all documents with an empty filter
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -108,31 +113,6 @@ func createLink(c *gin.Context) {
 	if err := c.BindJSON(&codeList); err != nil {
 		return
 	}
-	serverAPI := options.ServerAPI(options.ServerAPIVersion1)
-	opts := options.Client().ApplyURI(URI).SetServerAPIOptions(serverAPI)
-
-	// Create a new client and connect to the server
-	client, err := mongo.Connect(context.TODO(), opts)
-	if err != nil {
-		panic(err)
-	}
-
-	defer func() {
-		if err = client.Disconnect(context.TODO()); err != nil {
-			panic(err)
-		}
-	}()
-	// Send a ping to confirm a successful connection
-	if err := client.Database("admin").RunCommand(context.TODO(), bson.D{{"ping", 1}}).Err(); err != nil {
-		panic(err)
-	}
-	fmt.Println("Pinged your deployment. You successfully connected to MongoDB!")
-
-	ctx := context.Background()
-
-	db := client.Database("URL_Shortener_Database")
-
-	col := db.Collection("URLs")
 
 	cursor, err := col.Find(ctx, bson.M{}) // Find all documents with an empty filter
 	if err != nil {
@@ -176,36 +156,8 @@ outerLoop:
 }
 
 func connectAndCreate(newLinks []URL) {
-	serverAPI := options.ServerAPI(options.ServerAPIVersion1)
-	opts := options.Client().ApplyURI(URI).SetServerAPIOptions(serverAPI)
-
-	// Create a new client and connect to the server
-	client, err := mongo.Connect(context.TODO(), opts)
-	if err != nil {
-		panic(err)
-	}
-
-	defer func() {
-		if err = client.Disconnect(context.TODO()); err != nil {
-			panic(err)
-		}
-	}()
-	// Send a ping to confirm a successful connection
-	if err := client.Database("admin").RunCommand(context.TODO(), bson.D{{"ping", 1}}).Err(); err != nil {
-		panic(err)
-	}
-	fmt.Println("Pinged your deployment. You successfully connected to MongoDB!")
-
-	ctx := context.Background()
-
-	// Get the database object
-	db := client.Database("URL_Shortener_Database")
-
-	// Get the collection object (or create it if it doesn't exist)
-	col := db.Collection("URLs")
-
 	for link := range newLinks {
-		_, err = col.InsertOne(ctx, link)
+		_, err := col.InsertOne(ctx, link)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -215,6 +167,8 @@ func connectAndCreate(newLinks []URL) {
 }
 
 func main() {
+	connectToDB()
+
 	router := gin.Default()
 	router.GET("/links", getLinks) // curl localhost:8080/links
 	//router.GET("/links/:short_code", requestLink) // curl localhost:8080/links/000002
