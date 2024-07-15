@@ -20,6 +20,8 @@ var db *mongo.Database
 var col *mongo.Collection
 var client *mongo.Client
 
+var links []URL
+
 func connectToDB() {
 	serverAPI := options.ServerAPI(options.ServerAPIVersion1)
 	opts := options.Client().ApplyURI(URI).SetServerAPIOptions(serverAPI)
@@ -49,35 +51,35 @@ type URL struct {
 }
 
 type code struct {
-	LongURL string `json:"long_url"`
+	LongURL string `bson:"long_url"`
 }
 
-func getLinks(c *gin.Context) {
+func fillLinkList() error {
 	cursor, err := col.Find(ctx, bson.M{}) // Find all documents with an empty filter
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
+		return err
 	}
 	defer cursor.Close(context.Background())
-
-	var links []URL
 
 	for cursor.Next(context.Background()) {
 		var link URL // Define a Link object for each document
 		err := cursor.Decode(&link)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
+			return err
 		}
 		links = append(links, link)
 	}
 
 	if err := cursor.Err(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
+		return err
 	}
+	return err
+}
 
+func printLinks(c *gin.Context) {
+	fillLinkList()
 	c.IndentedJSON(http.StatusOK, links)
+	links = links[:0]
 }
 
 /*func requestLink(c *gin.Context) {
@@ -116,7 +118,7 @@ func createLink(c *gin.Context) {
 	}
 	defer cursor.Close(context.Background())
 
-	var links []URL
+	fillLinkList()
 
 	for cursor.Next(context.Background()) {
 		var link URL // Define a Link object for each document
@@ -165,6 +167,7 @@ outerLoop:
 	}
 
 	fmt.Println("URL mappings saved!")
+	links = links[:0]
 }
 
 func main() {
@@ -176,7 +179,7 @@ func main() {
 	}()
 
 	router := gin.Default()
-	router.GET("/links", getLinks) // curl localhost:8080/links
+	router.GET("/links", printLinks) // curl localhost:8080/links
 	//router.GET("/links/:short_code", requestLink) // curl localhost:8080/links/000002
 	router.POST("/links", createLink) // curl localhost:8080/links --include --header "Content-Type: application/json" -d '{"long_url": "https://gmail.com/"}' --request "POST"
 	router.Run("localhost:8080")
