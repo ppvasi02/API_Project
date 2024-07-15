@@ -30,11 +30,6 @@ func connectToDB() {
 		panic(err)
 	}
 
-	/*defer func() {
-		if err = client.Disconnect(context.TODO()); err != nil {
-			panic(err)
-		}
-	}()*/
 	// Send a ping to confirm a successful connection
 	if err := client.Database("admin").RunCommand(context.TODO(), bson.D{{"ping", 1}}).Err(); err != nil {
 		panic(err)
@@ -122,7 +117,6 @@ func createLink(c *gin.Context) {
 	defer cursor.Close(context.Background())
 
 	var links []URL
-	//var documents []interface{}
 
 	for cursor.Next(context.Background()) {
 		var link URL // Define a Link object for each document
@@ -147,10 +141,6 @@ outerLoop:
 				continue outerLoop // move to next iteration of outerloop
 			}
 		}
-		/*doc := bson.D{
-			{"long_url", link.LongURL},
-			{"short_code", link.ShortCode},
-		}*/
 		newLink.LongURL = codeList[i].LongURL
 		newLink.ShortCode = uuid.New().String()[:6] // Get first 6 characters from UUID
 
@@ -175,28 +165,7 @@ outerLoop:
 	}
 
 	fmt.Println("URL mappings saved!")
-	//connectAndCreate(links)
 }
-
-/*func connectAndCreate(newLinks []URL) error {
-	var documents []interface{}
-	for _, link := range newLinks {
-		doc := bson.D{
-			{"long_url", link.LongURL},
-			{"short_code", link.ShortCode},
-		}
-		documents = append(documents, doc)
-	}
-
-	// Insert multiple documents in a single operation
-	_, err := col.InsertMany(context.Background(), documents)
-	if err != nil {
-		return err
-	}
-
-	fmt.Println("URL mappings saved!")
-	return nil
-}*/
 
 func main() {
 	connectToDB()
