@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"log"
 	"net/http"
 
 	//"errors"
@@ -17,6 +16,7 @@ import (
 
 var URI string = "mongodb+srv://pvasilyev:ccCTkS1UnwiAuxr4@apiproject0.uugqh4j.mongodb.net/?retryWrites=true&w=majority&appName=APIProject0"
 var ctx context.Context
+var db *mongo.Database
 var col *mongo.Collection
 var client *mongo.Client
 
@@ -30,11 +30,11 @@ func connectToDB() {
 		panic(err)
 	}
 
-	defer func() {
+	/*defer func() {
 		if err = client.Disconnect(context.TODO()); err != nil {
 			panic(err)
 		}
-	}()
+	}()*/
 	// Send a ping to confirm a successful connection
 	if err := client.Database("admin").RunCommand(context.TODO(), bson.D{{"ping", 1}}).Err(); err != nil {
 		panic(err)
@@ -43,14 +43,14 @@ func connectToDB() {
 
 	ctx = context.Background()
 
-	db := client.Database("URL_Shortener_Database")
+	db = client.Database("URL_Shortener_Database")
 
 	col = db.Collection("URLs")
 }
 
 type URL struct {
-	LongURL   string `json:"long_url"`
-	ShortCode string `json:"short_code"`
+	LongURL   string `bson:"long_url"`
+	ShortCode string `bson:"short_code"`
 }
 
 type code struct {
@@ -122,6 +122,7 @@ func createLink(c *gin.Context) {
 	defer cursor.Close(context.Background())
 
 	var links []URL
+	//var documents []interface{}
 
 	for cursor.Next(context.Background()) {
 		var link URL // Define a Link object for each document
@@ -146,28 +147,64 @@ outerLoop:
 				continue outerLoop // move to next iteration of outerloop
 			}
 		}
+		/*doc := bson.D{
+			{"long_url", link.LongURL},
+			{"short_code", link.ShortCode},
+		}*/
 		newLink.LongURL = codeList[i].LongURL
 		newLink.ShortCode = uuid.New().String()[:6] // Get first 6 characters from UUID
 
+		//documents = append(documents, doc)
 		links = append(links, newLink)
 		c.IndentedJSON(http.StatusCreated, newLink)
 	}
-	connectAndCreate(links)
-}
 
-func connectAndCreate(newLinks []URL) {
-	for link := range newLinks {
-		_, err := col.InsertOne(ctx, link)
-		if err != nil {
-			log.Fatal(err)
+	var documents []interface{}
+	for _, link := range links {
+		doc := bson.D{
+			{"long_url", link.LongURL},
+			{"short_code", link.ShortCode},
 		}
+		documents = append(documents, doc)
 	}
 
-	fmt.Println("URL mapping saved!")
+	// Insert multiple documents in a single operation
+	_, err = col.InsertMany(context.Background(), documents)
+	if err != nil {
+		return
+	}
+
+	fmt.Println("URL mappings saved!")
+	//connectAndCreate(links)
 }
+
+/*func connectAndCreate(newLinks []URL) error {
+	var documents []interface{}
+	for _, link := range newLinks {
+		doc := bson.D{
+			{"long_url", link.LongURL},
+			{"short_code", link.ShortCode},
+		}
+		documents = append(documents, doc)
+	}
+
+	// Insert multiple documents in a single operation
+	_, err := col.InsertMany(context.Background(), documents)
+	if err != nil {
+		return err
+	}
+
+	fmt.Println("URL mappings saved!")
+	return nil
+}*/
 
 func main() {
 	connectToDB()
+	defer func() {
+		if err := client.Disconnect(context.TODO()); err != nil {
+			panic(err)
+		}
+	}()
 
 	router := gin.Default()
 	router.GET("/links", getLinks) // curl localhost:8080/links
